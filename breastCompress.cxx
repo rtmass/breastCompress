@@ -64,7 +64,7 @@ int main(int argc, char* argv[]){
     ("dir,d", po::value<std::string>()->default_value("."),"work directory")
     ("tetvolume,v", po::value<double>()->default_value(25.0), "maximum tetrahedral volume")
     ("decimateFrac,r", po::value<double>()->default_value(0.99), "surface mesh decimation fraction")
-    ("febiopath, f", po::value<std::string>(),"FeBiO path")
+    ("febiopath,f", po::value<std::string>(),"FeBiO path")
     ("help,h", "print help message")
     ;
 

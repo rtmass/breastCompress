@@ -16,6 +16,6 @@ include_directories("$(PROJECT_SOURCE_DIR)")
 SET(CMAKE_BUILD_TYPE "Release")
 SET(CMAKE_CXX_FLAGS  "-std=c++0x ${CMAKE_CXX_FLAGS}")
 
-add_executable(breastCompressMain breastCompress.cxx)
+add_executable(breastCompress breastCompress.cxx)
 
-target_link_libraries(breastCompressMain z tet lapack blas boost_program_options ${VTK_LIBRARIES})
+target_link_libraries(breastCompress z tet lapack blas boost_program_options ${VTK_LIBRARIES})
