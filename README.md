@@ -1,5 +1,7 @@
 # BreastCompress
 
+This is a modified version of the Breast Phantom Compression Software
+
 DIDSR Anthropomorphic Breast Phantom Compression Software
 
 **Documentation and installation instructions are available here:**
