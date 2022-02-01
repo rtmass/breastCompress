@@ -26,11 +26,11 @@ int main(int argc, char* argv[]){
 
   double fatModulus = 5.0; // kPa (equivalent to kg/(mm*s^2))
   double fatPoisson = 0.49;
-  double fatDensity = 0.000001; // kg/mm^3
+  double fatDensity = 0.00000093; // kg/mm^3
 
   double glandModulus = 15.0; // kPa
   double glandPoisson = 0.49;
-  double glandDensity = 0.000001; // kg/mm^3
+  double glandDensity = 0.00000104; // kg/mm^3
 
   double massModulus = 20.0; // kPa
   double massPoisson = 0.49;
@@ -49,6 +49,7 @@ int main(int argc, char* argv[]){
   tissue.artery = 150;
   tissue.vein = 225 ;
   tissue.muscle = 40;
+  tissue.muscles = 41;
   tissue.mass = 200;
   tissue.calc = 250;
   tissue.paddle = 50;
@@ -65,6 +66,9 @@ int main(int argc, char* argv[]){
     ("dir,d", po::value<std::string>()->default_value("."),"work directory")
     ("tetvolume,v", po::value<double>()->default_value(25.0), "maximum tetrahedral volume")
     ("decimateFrac,r", po::value<double>()->default_value(0.99), "surface mesh decimation fraction")
+    ("gravity,g", po::value<double>()->default_value(3000.0), "Force in kg*mm/s^2")
+    ("maxforce,n", po::value<double>()->default_value(100.0), "Max Compression Force in N")
+    ("shiftlenght,l", po::value<double>()->default_value(0.0), "Lenght shift during MLO projection")
     ("help,h", "print help message")
     ;
 
@@ -121,6 +125,14 @@ int main(int argc, char* argv[]){
     cerr << "Compressed thickness should be between 10 and 200 mm.\n";
     return(1);
   }
+  
+  double maxforce = vm["maxforce"].as<double>();
+  // check for compression force
+  if(maxforce < 30.0 || maxforce > 300.0){
+    cerr << "Maximum compression force must be 30 to 300 N.\n";
+    return(1);
+  }
+  
   int numMeshes = vm["meshes"].as<int>();
   bool autoRemesh = (numMeshes==0);
 
@@ -132,6 +144,10 @@ int main(int argc, char* argv[]){
     cerr << "Invalid mesh decimation fraction.\n";
     return(1);
   }
+  
+  //added lenght shift
+  //rtmass
+  double shiftlenght = vm["shiftlenght"].as<double>();
     
   tetgenbehavior tetPar;
   tetPar.plc = 1;
@@ -159,9 +175,14 @@ int main(int argc, char* argv[]){
   double origPaddleWidth = 0.0;
   double origPaddleLength = 0.0;
   double paddleDist = 0.0;
+  
+  // Gravity
+
+  double gravity = vm["gravity"].as<double>();
+  double rigidforce = - gravity*cos(angle)/1000;
 
   int meshCount = 0;
-  const int MAX_MESHES = 18;
+  const int MAX_MESHES = 20;
 
   // main loop
   while((autoRemesh && !done && (meshCount < MAX_MESHES))
@@ -623,23 +644,31 @@ int main(int argc, char* argv[]){
     double paddleLipHeight = 15.0; // must be greater than paddleEdgeRadius
 
     // paddle retreat after remeshing
-    double retreatDist = 10.0*paddleHeight;
+    double retreatDist = 3.0*paddleHeight;
 
     if(meshCount == 0){
-      topPaddleCenter[0] = paddleLength/2.0 + (phantomBounds[1]-phantomBounds[0])*0.125;
+      
       topPaddleCenter[1] = nipplePos[1];
       if(!rotate){
         topPaddleCenter[2] = phantomBounds[5] + 4*paddleHeight/2.0;
+        //debug
+        topPaddleCenter[0] = paddleLength/2.0 + (phantomBounds[1]-phantomBounds[0])*0.125;
+        
       } else {
         topPaddleCenter[2] = phantomBounds[5] + 30*paddleHeight/2.0;
+        //debug modified for pectoral muscle
+        topPaddleCenter[0] = paddleLength/2.0 + (phantomBounds[1]-phantomBounds[0])*shiftlenght;
       }
-
-      bottomPaddleCenter[0] = paddleLength/2.0  + (phantomBounds[1]-phantomBounds[0])*0.1;
+      
       bottomPaddleCenter[1] = nipplePos[1];
       if(!rotate){
         bottomPaddleCenter[2] = phantomBounds[4] - 4*paddleHeight/2.0;
+        //debug 
+        bottomPaddleCenter[0] = paddleLength/2.0  + (phantomBounds[1]-phantomBounds[0])*0.1;
       } else {
         bottomPaddleCenter[2] = phantomBounds[4] - 30*paddleHeight/2.0;
+        //debug modified for pectoral muscle
+        bottomPaddleCenter[0] = paddleLength/2.0  + (phantomBounds[1]-phantomBounds[0])*(shiftlenght-0.025);
       }
     } else {
       // use previous interation's paddle position plus a retreat
@@ -652,9 +681,24 @@ int main(int argc, char* argv[]){
     }
 
     if(autoRemesh){
+        double stepfactor = 0.05;
       // try to complete full compression
-      paddleDist = ((topPaddleCenter[2]-bottomPaddleCenter[2] -
-                     paddleHeight - thickness)/2.0);
+      //paddleDist = ((topPaddleCenter[2]-bottomPaddleCenter[2] -
+      //               paddleHeight - thickness)/2.0);
+      //modification: try continous steps
+      if (meshCount < 2){
+        paddleDist = ((topPaddleCenter[2]-bottomPaddleCenter[2] -
+                     paddleHeight)*stepfactor*3/1.0);
+      } else if (meshCount < 7){
+          paddleDist = ((topPaddleCenter[2]-bottomPaddleCenter[2] -
+                     paddleHeight-retreatDist)*2.5*stepfactor/1.0 + retreatDist);      
+      } else {
+          paddleDist = ((topPaddleCenter[2]-bottomPaddleCenter[2] -
+                     paddleHeight-retreatDist)*stepfactor*1.5/1.0 + retreatDist);
+      }
+      
+      
+          
     } else {
       if(numMeshes >= 3)
       {
@@ -1387,7 +1431,7 @@ int main(int argc, char* argv[]){
 
     // write FEBio simulation file
     cout << "Writing FEBio simulation file...\n";
-    ofstream febFile;
+    std::ofstream febFile;
     char febioFilename[256];
     sprintf(febioFilename, "%s/febio_%d_%d.feb", workDir.c_str(), seed, meshCount);
     febFile.open(febioFilename);
@@ -1400,14 +1444,18 @@ int main(int argc, char* argv[]){
     // control
     int timeSteps;
     double dtMin;
+    
     if (autoRemesh){
-      timeSteps=20;
-      dtMin = 0.005;
+      timeSteps=10;
+      dtMin = 0.02;
+      //dtMin = 0.005;
     } else {
       timeSteps = (int)(ceil(100/numMeshes));
       dtMin = 0.001;
     }
     double stepSize = 1.0/((double)timeSteps);
+    
+    //cout << decimateFrac <<" " << decimateCor << " " <<timeSteps;
 
     febFile << "\t<Control>\n";
     febFile << "\t\t<time_steps>" << timeSteps << "</time_steps>\n";
@@ -1423,7 +1471,7 @@ int main(int argc, char* argv[]){
     febFile << "\t\t\t<dtmax>" << stepSize << "</dtmax>\n";
     // can lower max_retries to either pass or fail faster.
     if(autoRemesh){
-      febFile << "\t\t\t<max_retries>7</max_retries>\n";
+      febFile << "\t\t\t<max_retries>10</max_retries>\n";
     } else {
       febFile << "\t\t\t<max_retries>50</max_retries>\n";
     }
@@ -1624,12 +1672,14 @@ int main(int argc, char* argv[]){
           // use fat material
           tetTypes->SetTuple1(i, 1);
           fatFound=true;
-        } else if (p[0] == tissue.muscle) {
+        } else if (p[0] == tissue.muscle || p[0] == tissue.muscles) {
           // use fat and add nodes to fixed boundary
 	  tetTypes->SetTuple1(i, 5);
           muscleFound=true;
-          for(int j=0; j<4; j++){
-            muscleNodes->InsertUniqueId(tetout.tetrahedronlist[4*i+j]);
+          if (p[0]==tissue.muscle){
+            for(int j=0; j<4; j++){
+                muscleNodes->InsertUniqueId(tetout.tetrahedronlist[4*i+j]);
+            }
           }
         } else if(p[0] == tissue.mass) {
           tetTypes->SetTuple1(i, 6);
@@ -1722,7 +1772,9 @@ int main(int argc, char* argv[]){
 
     // end geometry
     febFile << "\t</Geometry>\n";
-
+    
+    
+    
     // boundary - muscle tissue fixed
     febFile << "\t<Boundary>\n";
 
@@ -1744,12 +1796,13 @@ int main(int argc, char* argv[]){
 
     febFile << "\t</Boundary>\n";
 
-    // Gravity
+ 
     febFile << "\t<Loads>\n";
     febFile << "\t\t<body_load type=\"const\">\n";
-    febFile << "\t\t\t<z lc=\"1\">4905</z>\n"; //gravity in kg*mm/s^2 assuming 0.5 kg breast
+    febFile << "\t\t\t<z lc=\"1\">" << gravity << "</z>\n"; //gravity in kg*mm/s^2 assuming 0.5 kg breast
     febFile << "\t\t</body_load>\n";
     febFile << "\t</Loads>\n";
+    
 
     // Contacts
 
@@ -1937,7 +1990,15 @@ int main(int argc, char* argv[]){
 
     // Left a miniscule force so that the breast wouldn't be underconstrained
     // (causing problem to diverge).
-    febFile << "\t\t\t<point>1,0.001</point>\n";
+    //febFile << "\t\t\t<point>1,0.001</point>\n";
+    if(meshCount==0)
+    {
+    febFile << "\t\t\t<point>1,1.0</point>\n";
+    }
+    else
+    {
+      febFile << "\t\t\t<point>1,0.001</point>\n";
+    }
     //    }
 
     febFile << "\t\t</loadcurve>\n";
@@ -1981,6 +2042,7 @@ int main(int argc, char* argv[]){
     febFile << "\t<Output>\n";
     febFile << "\t\t<plotfile type=\"febio\">\n";
     febFile << "\t\t\t<var type=\"displacement\"/>\n";
+    febFile << "\t\t\t<var type=\"rigid force\"/>\n";
     febFile << "\t\t\t<compression>0</compression>\n";
     febFile << "\t\t</plotfile>\n";
     febFile << "\t</Output>\n";
@@ -2131,15 +2193,70 @@ int main(int argc, char* argv[]){
 
     rawDisp = new float[dispDataSize/4];
     numRead = fread(rawDisp, sizeof *rawDisp, dispDataSize/4, fefile);
+    
+    
+    //if(numRead == dispDataSize/4){
+    //  fclose(fefile);
+    //} else {
+    //  fclose(fefile);
+    //  cerr << "Data read failure\n";
+    //  return(1);
+    //}
 
-    if(numRead == dispDataSize/4){
+    //new modifications
+    // 07-20-21
+    //skip some lines
+    for (int i = 0; i < 10; i++) {
+    //skip lines
+        numRead = fread(&dword, 1, 4, fefile);
+        }
+    //
+    
+    uint32_t rigidDataSize1;
+    // the rigid data size (bytes)
+    numRead = fread(&rigidDataSize1, 1, 4, fefile);
+    // allocate memory
+    float *rawRigid1;
+    rawRigid1 = new float[rigidDataSize1/4];
+    numRead = fread(rawRigid1, sizeof *rawRigid1, rigidDataSize1/4, fefile);   
+    float *rigid1Ptr = rawRigid1;
+    
+    
+    for (int i = 0; i < 11; i++) {
+        //skip lines
+        numRead = fread(&dword, 1, 4, fefile);
+        }
+        
+     // allocate memory
+    float *rawRigid2;
+    uint32_t rigidDataSize2;
+    
+    // the rigid data size (bytes)
+    numRead = fread(&rigidDataSize2, 1, 4, fefile);
+
+    rawRigid2 = new float[rigidDataSize2/4];
+    numRead = fread(rawRigid2, sizeof *rawRigid2, rigidDataSize2/4, fefile);   
+    
+    float *rigid2Ptr = rawRigid2;
+    
+    
+    if(numRead == rigidDataSize2/4){
       fclose(fefile);
     } else {
       fclose(fefile);
       cerr << "Data read failure\n";
       return(1);
     }
-
+    
+    float deltaforcez;
+    float deltaforcey;
+    float deltaforce;
+    
+    deltaforcez = (rigid1Ptr[2] - rigid2Ptr[2])/1000;
+    deltaforcey =  (rigid1Ptr[1] - rigid2Ptr[1])/1000;
+    
+    deltaforce = sqrt(deltaforcez*deltaforcez + deltaforcey*deltaforcey);
+    
     vtkSmartPointer<vtkFloatArray> displace =
       vtkSmartPointer<vtkFloatArray>::New();
 
@@ -2187,10 +2304,15 @@ int main(int argc, char* argv[]){
     if(gain > 0.0){
       minimumFinalThicknessSoFar = finalThickness;
     }
+    
+    rigidforce = rigidforce + deltaforce;
 
     cout << "Compressed breast thickness = " << finalThickness << " mm\n";
+    cout << "Compression force = " << rigidforce << " N\n";
 
-    if(finalThickness-thickness<=0.1 || (finalThickness-thickness <= 5.0 && gain >= 0 && gain <= 1)){
+    if(finalThickness-thickness<=0.1 || (finalThickness-thickness <= 5.0 && gain >= 0 && gain <= 1)
+        || (rigidforce>maxforce))
+            {
 	done=true;
     }
     

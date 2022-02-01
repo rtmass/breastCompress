@@ -28,6 +28,8 @@ typedef struct {
 	unsigned char mass;
 	unsigned char calc;
 	unsigned char paddle;
+    //debug
+    unsigned char muscles;
 } tissueStruct;
 
 

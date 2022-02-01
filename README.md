@@ -2,6 +2,16 @@
 
 This is a modified version of the Breast Phantom Compression Software
 
+## Main Changes to the default version
+
+- Gravity is ON by default, and the weight can be adjusted.
+- Added an option to shift the breast location laterally before compression,
+to provide a source of variation for the muscle.
+- **NEW** The rigid force of the compression and support plates are measured.
+- It is possible to set the maximum compression force to terminate the compression.
+
+## Below is the original documentation
+
 DIDSR Anthropomorphic Breast Phantom Compression Software
 
 **Documentation and installation instructions are available here:**
