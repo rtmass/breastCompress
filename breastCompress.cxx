@@ -26,10 +26,12 @@ int main(int argc, char* argv[]){
 
   double fatModulus = 5.0; // kPa (equivalent to kg/(mm*s^2))
   double fatPoisson = 0.49;
+  // modified density to match Hammerstein et al. values
   double fatDensity = 0.00000093; // kg/mm^3
 
   double glandModulus = 15.0; // kPa
   double glandPoisson = 0.49;
+  // modified density to match Hammerstein et al. values
   double glandDensity = 0.00000104; // kg/mm^3
 
   double massModulus = 20.0; // kPa
@@ -49,6 +51,7 @@ int main(int argc, char* argv[]){
   tissue.artery = 150;
   tissue.vein = 225 ;
   tissue.muscle = 40;
+  // fake muscle because the original is fixed
   tissue.muscles = 41;
   tissue.mass = 200;
   tissue.calc = 250;
@@ -66,6 +69,7 @@ int main(int argc, char* argv[]){
     ("dir,d", po::value<std::string>()->default_value("."),"work directory")
     ("tetvolume,v", po::value<double>()->default_value(25.0), "maximum tetrahedral volume")
     ("decimateFrac,r", po::value<double>()->default_value(0.99), "surface mesh decimation fraction")
+    // new input parameters for the compression routine
     ("gravity,g", po::value<double>()->default_value(3000.0), "Force in kg*mm/s^2")
     ("maxforce,n", po::value<double>()->default_value(100.0), "Max Compression Force in N")
     ("shiftlenght,l", po::value<double>()->default_value(0.0), "Lenght shift during MLO projection")
@@ -126,6 +130,7 @@ int main(int argc, char* argv[]){
     return(1);
   }
   
+  // minimum and maximum values for the compression force
   double maxforce = vm["maxforce"].as<double>();
   // check for compression force
   if(maxforce < 30.0 || maxforce > 300.0){
@@ -177,11 +182,13 @@ int main(int argc, char* argv[]){
   double paddleDist = 0.0;
   
   // Gravity
-
+  // now gravity is a value set and not always constant
   double gravity = vm["gravity"].as<double>();
+  // remove breast weight from the measured rigid force
   double rigidforce = - gravity*cos(angle)/1000;
 
   int meshCount = 0;
+  // increase the values from 18 to 20
   const int MAX_MESHES = 20;
 
   // main loop
@@ -644,6 +651,7 @@ int main(int argc, char* argv[]){
     double paddleLipHeight = 15.0; // must be greater than paddleEdgeRadius
 
     // paddle retreat after remeshing
+    // decrease value from 10.0 to 3.0
     double retreatDist = 3.0*paddleHeight;
 
     if(meshCount == 0){
@@ -651,7 +659,7 @@ int main(int argc, char* argv[]){
       topPaddleCenter[1] = nipplePos[1];
       if(!rotate){
         topPaddleCenter[2] = phantomBounds[5] + 4*paddleHeight/2.0;
-        //debug
+        // modified for pectoral muscle
         topPaddleCenter[0] = paddleLength/2.0 + (phantomBounds[1]-phantomBounds[0])*0.125;
         
       } else {
@@ -663,7 +671,7 @@ int main(int argc, char* argv[]){
       bottomPaddleCenter[1] = nipplePos[1];
       if(!rotate){
         bottomPaddleCenter[2] = phantomBounds[4] - 4*paddleHeight/2.0;
-        //debug 
+        //debug modified for pectoral muscle
         bottomPaddleCenter[0] = paddleLength/2.0  + (phantomBounds[1]-phantomBounds[0])*0.1;
       } else {
         bottomPaddleCenter[2] = phantomBounds[4] - 30*paddleHeight/2.0;
@@ -681,6 +689,7 @@ int main(int argc, char* argv[]){
     }
 
     if(autoRemesh){
+      // now the step is dynamically calculated based on the number of meshes
         double stepfactor = 0.05;
       // try to complete full compression
       //paddleDist = ((topPaddleCenter[2]-bottomPaddleCenter[2] -
@@ -1446,6 +1455,7 @@ int main(int argc, char* argv[]){
     double dtMin;
     
     if (autoRemesh){
+      // modified the number of time steps and the dtMin value
       timeSteps=10;
       dtMin = 0.02;
       //dtMin = 0.005;
@@ -1471,6 +1481,7 @@ int main(int argc, char* argv[]){
     febFile << "\t\t\t<dtmax>" << stepSize << "</dtmax>\n";
     // can lower max_retries to either pass or fail faster.
     if(autoRemesh){
+      //increased max retries from 7 to 10
       febFile << "\t\t\t<max_retries>10</max_retries>\n";
     } else {
       febFile << "\t\t\t<max_retries>50</max_retries>\n";
@@ -1673,10 +1684,12 @@ int main(int argc, char* argv[]){
           tetTypes->SetTuple1(i, 1);
           fatFound=true;
         } else if (p[0] == tissue.muscle || p[0] == tissue.muscles) {
-          // use fat and add nodes to fixed boundary
+            // included the second type of muscle (rigid and flexible) 
+            // use fat and add nodes to fixed boundary
 	  tetTypes->SetTuple1(i, 5);
           muscleFound=true;
           if (p[0]==tissue.muscle){
+              // here we only consider the rigid muscle
             for(int j=0; j<4; j++){
                 muscleNodes->InsertUniqueId(tetout.tetrahedronlist[4*i+j]);
             }
@@ -1799,6 +1812,7 @@ int main(int argc, char* argv[]){
  
     febFile << "\t<Loads>\n";
     febFile << "\t\t<body_load type=\"const\">\n";
+    // now gravity is not constant but a parameter defined at the begining
     febFile << "\t\t\t<z lc=\"1\">" << gravity << "</z>\n"; //gravity in kg*mm/s^2 assuming 0.5 kg breast
     febFile << "\t\t</body_load>\n";
     febFile << "\t</Loads>\n";
@@ -1991,6 +2005,7 @@ int main(int argc, char* argv[]){
     // Left a miniscule force so that the breast wouldn't be underconstrained
     // (causing problem to diverge).
     //febFile << "\t\t\t<point>1,0.001</point>\n";
+    // the point now is determined by the meshCount
     if(meshCount==0)
     {
     febFile << "\t\t\t<point>1,1.0</point>\n";
@@ -2042,6 +2057,7 @@ int main(int argc, char* argv[]){
     febFile << "\t<Output>\n";
     febFile << "\t\t<plotfile type=\"febio\">\n";
     febFile << "\t\t\t<var type=\"displacement\"/>\n";
+    // included rigid force
     febFile << "\t\t\t<var type=\"rigid force\"/>\n";
     febFile << "\t\t\t<compression>0</compression>\n";
     febFile << "\t\t</plotfile>\n";
@@ -2194,6 +2210,7 @@ int main(int argc, char* argv[]){
     rawDisp = new float[dispDataSize/4];
     numRead = fread(rawDisp, sizeof *rawDisp, dispDataSize/4, fefile);
     
+    // commented this section to read the rigid force
     
     //if(numRead == dispDataSize/4){
     //  fclose(fefile);
@@ -2252,8 +2269,16 @@ int main(int argc, char* argv[]){
     float deltaforcey;
     float deltaforce;
     
+    // separate each component of the force
+    // here the X is not considered
+    
+    // the force is calculated as:
+    // DeltaForce = CompressionForce - SupportForce
+    
     deltaforcez = (rigid1Ptr[2] - rigid2Ptr[2])/1000;
     deltaforcey =  (rigid1Ptr[1] - rigid2Ptr[1])/1000;
+    
+    // calculate the module
     
     deltaforce = sqrt(deltaforcez*deltaforcez + deltaforcey*deltaforcey);
     
@@ -2305,10 +2330,14 @@ int main(int argc, char* argv[]){
       minimumFinalThicknessSoFar = finalThickness;
     }
     
+    // add to the counter for each step
+    
     rigidforce = rigidforce + deltaforce;
 
     cout << "Compressed breast thickness = " << finalThickness << " mm\n";
     cout << "Compression force = " << rigidforce << " N\n";
+    
+    // added the condition of force to stop the compression
 
     if(finalThickness-thickness<=0.1 || (finalThickness-thickness <= 5.0 && gain >= 0 && gain <= 1)
         || (rigidforce>maxforce))
